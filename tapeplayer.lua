@@ -4,6 +4,7 @@ local computer = require("computer")
 local k = require("keyboard")
 local shell = require("shell")
 local sides = require("sides")
+local filesystem = require("filesystem")
 local rs = component.redstone
 
 local td = component.tape_drive
@@ -36,6 +37,7 @@ repeat
     os.sleep(0.25)
 until tapeready
 repeat
+    
     reloadtape = false
     toggleloop = false
     readfail = 0
@@ -44,6 +46,7 @@ repeat
     tapesize4 = 0
     tapesize5 = 0
     tapesize6 = 0
+    term.setCursorBlink(false)
 
     term.clear()
     td.stop()
@@ -59,17 +62,19 @@ repeat
     tapelength = td.seek(tapesize)
     term.clear()
     repeat
-        td.seek(-8192)
-        tapesize2 = tapesize2 + 8192
+        td.seek(-(8192*3))
+        tapesize2 = tapesize2 + (8192*3)
         read = td.read()
         if read > 0 then
             readfail = readfail+1
         end
+        term.clear()
+        term.setCursor(0,0)
         print(tapesize2,"/",tapesize,read)
     until readfail > 0 or tapesize2 > tapesize
 
     td.seek(tapesize)
-    td.seek(-(tapesize2-8192))
+    td.seek(-(tapesize2-(8192*3)))
     readfail = 0
     term.clear()
     repeat
@@ -79,11 +84,13 @@ repeat
         if read > 0 then
             readfail = readfail+1
         end
+        term.clear()
+        term.setCursor(0,0)
         print(tapesize3,"/",tapesize,read)
     until readfail > 0 or tapesize3 > tapesize
 
     td.seek(tapesize)
-    td.seek(-(tapesize2-8192))
+    td.seek(-(tapesize2-(8192*3)))
     td.seek(-(tapesize3-512))
     readfail = 0
     term.clear()
@@ -94,53 +101,46 @@ repeat
         if read > 0 then
             readfail = readfail+1
         end
+        term.clear()
+        term.setCursor(0,0)
         print(tapesize4,"/",tapesize,read)
     until readfail > 0 or tapesize4 > tapesize
-
-    td.seek(tapesize)
-    td.seek(-(tapesize2-8192))
-    td.seek(-(tapesize3-512))
-    td.seek(-(tapesize4-4))
-    readfail = 0
-    term.clear()
-    repeat
-        td.seek(-2)
-        tapesize5 = tapesize5 + 2
-        read = td.read()
-        if read > 0 then
-            readfail = readfail+1
-        end
-        print(tapesize5,"/",tapesize,read)
-    until readfail > 0 or tapesize5 > tapesize
-
-    td.seek(tapesize)
-    td.seek(-(tapesize2-8192))
-    td.seek(-(tapesize3-512))
-    td.seek(-(tapesize4-4))
-    td.seek(-(tapesize5-2))
-    readfail = 0
-    term.clear()
-    repeat
-        td.seek(-1)
-        tapesize6 = tapesize6 + 1
-        read = td.read()
-        if read > 0 then
-            readfail = readfail+1
-        end
-        print(tapesize6,"/",tapesize,read)
-    until readfail > 0 or tapesize6 > tapesize
-
+    if not filesystem.exists("/home/darkconfig.txt") then
+        darkconfig = io.open("/home/darkconfig.txt", "w")
+        darkconfig:write(tostring(false))
+        darkconfig:close()
+    end
     tapesizeF = tapesize-((((tapesize2-tapesize3)-tapesize4)-tapesize5)-tapesize6)
+    darkconfig1 = io.open("/home/darkconfig.txt", "r")
+    toggledark1 = darkconfig1:read("*a")
+    if toggledark1 == "true" then
+        toggledark = true
+    else
+        toggledark = false
+    end
+    darkconfig1:close()
 
-    wbox = c("#efeff1")
-    wtitle = c("#dedee3")
-    wline = c("#bababf")
-    wred = c("#FF0000")
-    wtext1 = c("#555555")
-    wtext2 = c("#888888")
-    wtext3 = c("#AAAAAA")
-    wblue = c("#7070e1")
-    wblue1 = c("#9292e2")
+    if toggledark then
+        wbox = c("#444444")
+        wtitle = c("#333333")
+        wline = c("#25b2f8")
+        wred = c("#FF4444")
+        wtext1 = c("#AAAAAA")
+        wtext2 = c("#DDDDDD")
+        wtext3 = c("#EEEEEE")
+        wblue = c("#7070e1")
+        wblue1 = c("#9292e2")
+    else
+        wbox = c("#efeff1")
+        wtitle = c("#dedee3")
+        wline = c("#bababf")
+        wred = c("#FF0000")
+        wtext1 = c("#555555")
+        wtext2 = c("#888888")
+        wtext3 = c("#AAAAAA")
+        wblue = c("#7070e1")
+        wblue1 = c("#9292e2")
+    end
 
     if tapesizeF > tapesize-(tapesize/64) then
         wtitle = c("#e3cece")
@@ -203,7 +203,7 @@ repeat
     sf(wtext3)
 
     XT, YT = term.getCursor()
-    term.setCursor(XT-2,YT+1)
+    term.setCursor(XT-2,YT-1)
     term.write(string.format("%.0f", tapelength1*100))
     term.write("%")
 
@@ -232,8 +232,10 @@ repeat
     term.write("          ")
     sf(wtext3)
     term.setCursor(5,24)
-    term.write("L = Loop, P = Play, S = Stop, R = Rewind")
-
+    term.write("L = Loop, P = Play, S = Stop, R = Rewind, T = Change Label, ")
+    sf(c("#ff8a8a"))
+    term.write("Q = Quit")
+    td.play()
     i = 1
     repeat
         sb(wbox)
@@ -315,13 +317,72 @@ repeat
             td.seek(-tapelength)
         end
         t3 = keyrewind
+
+        local keyquit = k.isKeyDown("q")
+
+        if keyquit and not t4 then
+            computer.beep(200,0.5)
+            os.sleep(0.5)
+            jjs = 1
+            td.stop()
+            td.seek(-tapelength)
+            break
+        end
+        t4 = keyquit
+
+        local keylabel = k.isKeyDown("t")
+
+        if keylabel and not t5 then
+            computer.beep(500,0.25)
+            os.sleep(0.5)
+            term.setCursorBlink(true)
+            sb(wbox)
+            term.setCursor(4,5)
+            sf(wblue)
+            term.write("●───╢ ")
+            sf(wtext2)
+            term.write("Tape Title: ")
+            g.fill(22,5,80,1, " ")
+            sf(wtext1)
+            newtapelabel = term.read()
+            newtapelabel1 = string.sub(newtapelabel, 1, string.len(newtapelabel)-1)
+            td.setLabel(newtapelabel1)
+            break
+        end
+        t5 = keylabel
+
+        local keydark = k.isKeyDown("d")
+        if toggledark == nil then toggledark = false end -- safety check
+
+        if keydark and not t6 then
+            if keydark and not t then
+                darkconfig1 = io.open("/home/darkconfig.txt", "r")
+                toggledark1 = darkconfig1:read("*a")
+                if toggledark1 == "true" then
+                    toggledark = true
+                else
+                    toggledark = false
+                end
+                toggledark = not toggledark
+                if filesystem.exists("/home/darkconfig.txt") then
+                    filesystem.remove("/home/darkconfig.txt")
+                end
+                darkconfig = io.open("/home/darkconfig.txt", "w")
+                darkconfig:write(tostring(toggledark))
+                darkconfig:close()
+                darkconfig2 = io.open("/home/darkconfig.txt", "r")
+                print(darkconfig2:read("*a"))
+                break
+            end
+        end
+        t6 = keydark
         
         if not td.isReady() then
             os.sleep(1)
             reloadtape = true
             computer.beep(300,0.1)
             sb(wbox)
-            sf(c("#FF0000"))
+            sf(wred)
             term.setCursor(5,10)
             term.write("Please insert cassette tape!")   
             term.setCursor(5,11)
@@ -367,3 +428,9 @@ repeat
         os.sleep(0.25)
     until i == 0
 until jjs == 1
+
+sb(c("#000000"))
+sf(c("#FFFFFF"))
+term.clear()
+term.setCursor(0,0)
+shell.execute("reboot")
